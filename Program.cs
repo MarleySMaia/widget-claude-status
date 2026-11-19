@@ -25,6 +25,131 @@ record Section(string Title, List<Row> Rows);
 record ProcInfo(string Name, double Cpu, long Mem);
 record SysSnap(double Cpu, ulong MemUsed, ulong MemTotal, List<ProcInfo> Procs);
 
+// ---------- Autor e apoio ----------
+static class AppInfo
+{
+    public const string Author = "MarleySMaia";
+    public const string GitHubProfile = "https://github.com/MarleySMaia";
+    public const string Repository = "https://github.com/MarleySMaia/widget-claude-status";
+
+    // Chave Pix para doações (aleatória, e-mail, telefone ou CPF/CNPJ). Vazia = não exibe a chave.
+    // QR Code opcional: salve a imagem em Assets\pix-qr.png e recompile.
+    public const string PixKey = "";
+
+    public static string Version => typeof(AppInfo).Assembly.GetName().Version?.ToString(3) ?? "";
+
+    public static void Open(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+    }
+}
+
+class AboutWindow : Window
+{
+    static AboutWindow? _open;
+    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
+    static readonly Brush Link = new SolidColorBrush(Color.FromRgb(0x60, 0xA5, 0xFA));
+
+    public static void ShowSingle()
+    {
+        if (_open != null) { _open.Activate(); return; }
+        _open = new AboutWindow();
+        _open.Closed += (_, _) => _open = null;
+        _open.Show();
+    }
+
+    AboutWindow()
+    {
+        Title = "Sobre — Widget de Uso";
+        Width = 320;
+        SizeToContent = SizeToContent.Height;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Topmost = true;
+        Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x18));
+        Foreground = Brushes.White;
+        FontFamily = new FontFamily("Segoe UI");
+        FontSize = 12;
+
+        var sp = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
+        sp.Children.Add(new TextBlock { Text = "Widget de Uso", FontSize = 16, FontWeight = FontWeights.SemiBold });
+        sp.Children.Add(new TextBlock { Text = "Versão " + AppInfo.Version, Foreground = Muted, FontSize = 11 });
+
+        var by = new TextBlock { Margin = new Thickness(0, 12, 0, 0) };
+        by.Inlines.Add("Desenvolvido por ");
+        by.Inlines.Add(LinkTo("@" + AppInfo.Author, AppInfo.GitHubProfile));
+        sp.Children.Add(by);
+        var repo = new TextBlock { Margin = new Thickness(0, 4, 0, 0) };
+        repo.Inlines.Add(LinkTo("Código-fonte no GitHub", AppInfo.Repository));
+        sp.Children.Add(repo);
+
+        sp.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.FromArgb(0x30, 255, 255, 255)),
+            Margin = new Thickness(0, 14, 0, 12) });
+        sp.Children.Add(new TextBlock { Text = "☕ Gostou? Me paga um café", FontSize = 13, FontWeight = FontWeights.SemiBold });
+        sp.Children.Add(new TextBlock { Text = "Qualquer valor via Pix ajuda a manter o projeto.", Foreground = Muted,
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8) });
+
+        var qr = LoadQr();
+        if (qr != null)
+            sp.Children.Add(new Border { Background = Brushes.White, Padding = new Thickness(8), CornerRadius = new CornerRadius(6),
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8),
+                Child = new System.Windows.Controls.Image { Source = qr, Width = 170, Height = 170 } });
+
+        if (AppInfo.PixKey.Length > 0)
+        {
+            sp.Children.Add(new TextBlock { Text = "Chave Pix", Foreground = Muted, FontSize = 11 });
+            sp.Children.Add(new TextBox { Text = AppInfo.PixKey, IsReadOnly = true, Margin = new Thickness(0, 2, 0, 6),
+                Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x2A)), Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 255, 255, 255)), Padding = new Thickness(4) });
+            var copy = DarkButton("Copiar chave Pix");
+            copy.Click += (_, _) =>
+            {
+                try { Clipboard.SetText(AppInfo.PixKey); copy.Content = "Copiado! Obrigado ☕"; } catch { }
+            };
+            sp.Children.Add(copy);
+        }
+        else if (qr == null)
+        {
+            sp.Children.Add(new TextBlock { Text = "Pix ainda não configurado.", Foreground = Muted, FontStyle = FontStyles.Italic });
+        }
+
+        var close = DarkButton("Fechar");
+        close.Margin = new Thickness(0, 14, 0, 0);
+        close.Click += (_, _) => Close();
+        sp.Children.Add(close);
+        Content = sp;
+    }
+
+    static System.Windows.Documents.Hyperlink LinkTo(string text, string url)
+    {
+        var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(text))
+            { Foreground = Link, Cursor = Cursors.Hand, ToolTip = url };
+        h.Click += (_, _) => AppInfo.Open(url);
+        return h;
+    }
+
+    static Button DarkButton(string text) => new()
+    {
+        Content = text, Padding = new Thickness(10, 5, 10, 5), Cursor = Cursors.Hand,
+        Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x33)), Foreground = Brushes.White,
+        BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 255, 255, 255)),
+    };
+
+    static ImageSource? LoadQr()
+    {
+        try
+        {
+            var img = new System.Windows.Media.Imaging.BitmapImage();
+            img.BeginInit();
+            img.UriSource = new Uri("pack://application:,,,/Assets/pix-qr.png");
+            img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            img.EndInit();
+            return img;
+        }
+        catch { return null; } // sem QR Code embutido
+    }
+}
+
 static class Program
 {
     [STAThread]
@@ -266,6 +391,10 @@ class MainWindow : Window
         cm.Items.Add(Title("Ordenar processos por"));
         cm.Items.Add(Item("CPU", !_s.SortByMemory, () => _s.SortByMemory = false));
         cm.Items.Add(Item("Memória", _s.SortByMemory, () => _s.SortByMemory = true));
+        cm.Items.Add(new Separator());
+        var about = new MenuItem { Header = "Sobre / Apoie o projeto ☕" };
+        about.Click += (_, _) => AboutWindow.ShowSingle();
+        cm.Items.Add(about);
 
         cm.PlacementTarget = _gear;
         cm.Placement = PlacementMode.Bottom;
@@ -383,6 +512,7 @@ class MainWindow : Window
         _ghostItem.Click += (_, _) => SetGhost(!_ghost);
         menu.Items.Add(_ghostItem);
         menu.Items.Add("Atualizar agora", null, async (_, _) => await RefreshAsync());
+        menu.Items.Add("Sobre / Apoie o projeto ☕", null, (_, _) => AboutWindow.ShowSingle());
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("Sair", null, (_, _) => Quit());
 

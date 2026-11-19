@@ -14,6 +14,13 @@
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>none</DebugType>
+    <Version>1.0.0</Version>
+    <Authors>MarleySMaia</Authors>
   </PropertyGroup>
+
+  <!-- QR Code do Pix (opcional): coloque a imagem em Assets\pix-qr.png -->
+  <ItemGroup Condition="Exists('Assets\pix-qr.png')">
+    <Resource Include="Assets\pix-qr.png" />
+  </ItemGroup>
 
 </Project>

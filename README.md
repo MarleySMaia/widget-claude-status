@@ -40,7 +40,14 @@ Confira a instalação abrindo um novo terminal:
 dotnet --list-sdks
 ```
 
-### 2. Compile o widget
+### 2. Baixe e compile o widget
+
+Baixe o código com Git (ou pelo botão **Code → Download ZIP** no GitHub):
+
+```powershell
+git clone https://github.com/MarleySMaia/widget-claude-status.git
+cd widget-claude-status
+```
 
 Na pasta do projeto (onde estão `Program.cs` e `UsageWidget.csproj`):
 
@@ -73,6 +80,7 @@ Dê dois cliques em `publish\UsageWidget.exe`. O widget aparece no canto superio
 | Abrir configurações | Clique no ⚙. Funciona também no modo fantasma. |
 | Mostrar / ocultar | Clique com o botão esquerdo no ícone da bandeja. |
 | Atualizar agora / Sair | Clique com o botão direito no ícone da bandeja. |
+| Sobre / apoiar o projeto | Menu ⚙ ou bandeja → **Sobre / Apoie o projeto ☕**. |
 
 ---
 
@@ -164,6 +172,27 @@ Outro programa pode estar usando a mesma combinação. Use o cadeado ou o menu d
 
 ---
 
+## Apoie o projeto ☕
+
+Se o widget for útil para você, considere pagar um café ao autor. Qualquer valor via **Pix** ajuda. A chave e o QR Code ficam na janela **Sobre / Apoie o projeto**, aberta pelo menu ⚙ ou pela bandeja.
+
+Desenvolvido por [@MarleySMaia](https://github.com/MarleySMaia).
+
+### Configurando o Pix (para quem mantém um fork)
+
+A janela "Sobre" mostra a chave e/ou o QR Code que estiverem configurados:
+
+1. **Chave Pix**: em `Program.cs`, na classe `AppInfo`, preencha:
+   ```csharp
+   public const string PixKey = "sua-chave-aleatoria";
+   ```
+   Pode ser chave aleatória, e-mail, telefone ou CPF/CNPJ. Uma **chave aleatória** evita expor dados pessoais no repositório público.
+2. **QR Code** (opcional): gere no app do seu banco um QR de "receber qualquer valor", salve como `Assets\pix-qr.png` e recompile. O arquivo é embutido no executável automaticamente.
+
+Sem chave e sem QR, a janela mostra "Pix ainda não configurado". Para trocar o autor ou os links, edite as outras constantes de `AppInfo`.
+
+---
+
 ## Compartilhando o projeto
 
 Para enviar o código a outra pessoa, compartilhe apenas:
@@ -171,5 +200,13 @@ Para enviar o código a outra pessoa, compartilhe apenas:
 - `Program.cs`
 - `UsageWidget.csproj`
 - `README.md`
+- `LICENSE`
+- `Assets\pix-qr.png` (se existir)
 
-As pastas `bin`, `obj` e `publish` são geradas na compilação e podem ser apagadas.
+As pastas `bin`, `obj` e `publish` são geradas na compilação e podem ser apagadas. O `.gitignore` já as exclui do Git.
+
+---
+
+## Licença
+
+Distribuído sob a licença [MIT](LICENSE).
