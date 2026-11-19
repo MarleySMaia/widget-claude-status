@@ -223,7 +223,7 @@ class Settings
 
 // ---------- Temas ----------
 // Cada tema é uma paleta com as mesmas chaves. Os valores padrão abaixo são os do tema "Padrão",
-// então um tema em JSON só precisa informar o que muda.
+// então um tema novo só precisa informar o que muda.
 class Theme
 {
     public string Name { get; set; } = "Padrão";
@@ -255,11 +255,9 @@ class Theme
     }
 }
 
+// Para criar um tema novo, adicione-o a esta lista: ele aparece automaticamente no menu ⚙ → Tema.
 static class Themes
 {
-    public static readonly string Folder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UsageWidget", "themes");
-
     static List<Theme> BuiltIn() => new()
     {
         new Theme(),
@@ -279,52 +277,9 @@ static class Themes
             Opacity = 0.93 },
     };
 
-    static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true, WriteIndented = true,
-    };
+    public static readonly List<Theme> All = BuiltIn();
 
-    // Temas embutidos + arquivos *.json da pasta de temas (um tema com o mesmo nome substitui o embutido).
-    public static List<Theme> All()
-    {
-        var list = BuiltIn();
-        try
-        {
-            if (Directory.Exists(Folder))
-                foreach (var f in Directory.GetFiles(Folder, "*.json").OrderBy(f => f))
-                {
-                    try
-                    {
-                        var t = JsonSerializer.Deserialize<Theme>(File.ReadAllText(f), JsonOpts);
-                        if (t == null) continue;
-                        if (string.IsNullOrWhiteSpace(t.Name)) t.Name = Path.GetFileNameWithoutExtension(f);
-                        list.RemoveAll(x => x.Name == t.Name);
-                        list.Add(t);
-                    }
-                    catch { } // arquivo inválido: ignora
-                }
-        }
-        catch { }
-        return list;
-    }
-
-    public static Theme Find(string name) => All().FirstOrDefault(t => t.Name == name) ?? new Theme();
-
-    public static void OpenFolder()
-    {
-        try
-        {
-            Directory.CreateDirectory(Folder);
-            var example = Path.Combine(Folder, "_exemplo.json.txt");
-            if (!File.Exists(example))
-                File.WriteAllText(example, "// Renomeie para 'meu-tema.json', ajuste as cores e escolha o tema no menu ⚙.\n" +
-                    "// Campos omitidos usam os valores do tema Padrão.\n" +
-                    JsonSerializer.Serialize(new Theme { Name = "Meu Tema" }, JsonOpts));
-            Process.Start(new ProcessStartInfo(Folder) { UseShellExecute = true });
-        }
-        catch { }
-    }
+    public static Theme Find(string name) => All.FirstOrDefault(t => t.Name == name) ?? All[0];
 }
 
 // ---------- Monitor do sistema (CPU, RAM, processos) ----------
@@ -420,7 +375,7 @@ class MainWindow : Window
     DateTime? _updated;
     IntPtr _hwnd;
     readonly StackPanel _body = new(), _buttons = new() { Orientation = Orientation.Horizontal };
-    readonly TextBlock _lock = new(), _gear = new(), _footer = new(), _title = new();
+    readonly TextBlock _lock = new(), _gear = new(), _footer = new(), _title = new(), _support = new();
     readonly Border _frame = new();
     public static Theme T { get; private set; } = new();
     System.Windows.Forms.NotifyIcon _tray = null!;
@@ -450,12 +405,32 @@ class MainWindow : Window
         _buttons.Children.Add(_lock);
         top.Children.Add(_buttons);
 
-        _footer.FontSize = 9; _footer.Margin = new Thickness(0, 8, 0, 0);
+        _footer.FontSize = 9; _footer.VerticalAlignment = VerticalAlignment.Center;
+        // Botão de apoio no canto inferior direito: abre a janela Sobre com o Pix.
+        _support.Text = "☕ Apoie";
+        _support.FontSize = 10;
+        _support.FontWeight = FontWeights.SemiBold;
+        _support.Cursor = Cursors.Hand;
+        _support.Background = Brushes.Transparent;
+        _support.Padding = new Thickness(6, 1, 0, 1);
+        _support.HorizontalAlignment = HorizontalAlignment.Right;
+        _support.VerticalAlignment = VerticalAlignment.Center;
+        _support.ToolTip = "Sobre o projeto e como colaborar via Pix";
+        _support.MouseLeftButtonDown += (_, e) => { AboutWindow.ShowSingle(); e.Handled = true; };
+        _support.MouseEnter += (_, _) => _support.TextDecorations = TextDecorations.Underline;
+        _support.MouseLeave += (_, _) => _support.TextDecorations = null;
+        var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        foot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _footer.TextTrimming = TextTrimming.CharacterEllipsis;
+        foot.Children.Add(_footer);
+        Grid.SetColumn(_support, 1);
+        foot.Children.Add(_support);
 
         var root = new StackPanel();
         root.Children.Add(top);
         root.Children.Add(_body);
-        root.Children.Add(_footer);
+        root.Children.Add(foot);
 
         _frame.Padding = new Thickness(12, 8, 12, 8);
         _frame.Child = root;
@@ -510,16 +485,12 @@ class MainWindow : Window
         cm.Items.Add(Item("Detalhada", !_s.Compact, () => _s.Compact = false));
         cm.Items.Add(new Separator());
         var themes = new MenuItem { Header = "Tema: " + T.Name };
-        foreach (var t in Themes.All())
+        foreach (var t in Themes.All)
         {
             var mi = new MenuItem { Header = t.Name, IsCheckable = true, IsChecked = t.Name == T.Name };
             mi.Click += (_, _) => { _s.Theme = t.Name; _s.Save(); ApplyTheme(); };
             themes.Items.Add(mi);
         }
-        themes.Items.Add(new Separator());
-        var folder = new MenuItem { Header = "Abrir pasta de temas…" };
-        folder.Click += (_, _) => Themes.OpenFolder();
-        themes.Items.Add(folder);
         cm.Items.Add(themes);
         cm.Items.Add(new Separator());
         cm.Items.Add(Title("Mostrar"));
@@ -609,16 +580,22 @@ class MainWindow : Window
     bool _ghostHover;
 
     // No modo fantasma a janela é transparente a cliques, exceto enquanto o cursor
-    // estiver sobre os botões (⚙ e cadeado) — assim eles continuam clicáveis.
+    // estiver sobre os botões (⚙, cadeado e "Apoie") — assim eles continuam clicáveis.
     void HoverTick()
     {
         if (!_ghost || !IsVisible || _hwnd == IntPtr.Zero) return;
         GetCursorPos(out var c);
-        var tl = _buttons.PointToScreen(new Point(0, 0));
-        var s = VisualTreeHelper.GetDpi(this).DpiScaleX;
-        double w = _buttons.ActualWidth * s, h = _buttons.ActualHeight * s;
-        bool over = c.X >= tl.X - 4 && c.X <= tl.X + w + 4 && c.Y >= tl.Y - 4 && c.Y <= tl.Y + h + 4;
+        bool over = IsOver(_buttons, c) || IsOver(_support, c);
         if (over != _ghostHover) { _ghostHover = over; ApplyGhost(); }
+    }
+
+    bool IsOver(FrameworkElement el, POINT c)
+    {
+        if (!el.IsVisible) return false;
+        var tl = el.PointToScreen(new Point(0, 0));
+        var s = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        double w = el.ActualWidth * s, h = el.ActualHeight * s;
+        return c.X >= tl.X - 4 && c.X <= tl.X + w + 4 && c.Y >= tl.Y - 4 && c.Y <= tl.Y + h + 4;
     }
 
     void ApplyGhost()
@@ -817,6 +794,7 @@ class MainWindow : Window
         try { FontFamily = new FontFamily(T.Font); } catch { FontFamily = new FontFamily("Segoe UI"); }
         _title.Foreground = Gray;
         _footer.Foreground = Gray;
+        _support.Foreground = T.Brush(T.Accent);
         Render();
     }
 

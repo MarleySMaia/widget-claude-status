@@ -80,7 +80,7 @@ Dê dois cliques em `publish\UsageWidget.exe`. O widget aparece no canto superio
 | Abrir configurações | Clique no ⚙. Funciona também no modo fantasma. |
 | Mostrar / ocultar | Clique com o botão esquerdo no ícone da bandeja. |
 | Atualizar agora / Sair | Clique com o botão direito no ícone da bandeja. |
-| Sobre / apoiar o projeto | Menu ⚙ ou bandeja → **Sobre / Apoie o projeto ☕**. |
+| Sobre / apoiar o projeto | Botão **☕ Apoie** no canto inferior direito do widget, menu ⚙ ou bandeja → **Sobre / Apoie o projeto ☕**. |
 
 ---
 
@@ -115,54 +115,7 @@ Temas incluídos:
 | **Terminal** | Preto com verde fósforo, fonte Consolas e barras retas. |
 | **Claro** | Fundo claro, para quem usa o Windows no modo claro. |
 
-#### Criando o seu tema
-
-Não precisa recompilar:
-
-1. No menu ⚙, abra **Tema → Abrir pasta de temas…**. A pasta `%APPDATA%\UsageWidget\themes` é criada com o arquivo de exemplo `_exemplo.json.txt`.
-2. Copie o exemplo para um arquivo `.json`, por exemplo `meu-tema.json`, e ajuste as cores.
-3. Abra o menu ⚙ de novo e escolha o tema em **Tema**.
-
-Cada chave é opcional: o que você não informar usa o valor do tema Padrão. Um tema com o mesmo nome de um embutido o substitui.
-
-```json
-{
-  // Comentários são permitidos
-  "Name": "Meu Tema",
-  "Background": "#1A1A2E",
-  "Text": "#E0E0E8",
-  "Muted": "#8A8A9A",
-  "Track": "#333340",
-  "Border": "#2A2A38",
-  "Accent": "#6BA4D9",
-  "Ok": "#4ADE80",
-  "Warn": "#F59E0B",
-  "Crit": "#DC2626",
-  "Font": "Segoe UI",
-  "Opacity": 0.85,
-  "CornerRadius": 12,
-  "BarRadius": 3,
-  "BorderWidth": 1
-}
-```
-
-| Chave | Para que serve |
-|---|---|
-| `Name` | Nome exibido no menu. Se ficar vazio, usa o nome do arquivo. |
-| `Background` | Fundo do widget. |
-| `Text` | Texto principal. |
-| `Muted` | Títulos de seção, tempos de reset e rodapé. |
-| `Track` | Parte vazia das barras. |
-| `Border` | Contorno do widget. |
-| `Accent` | Links na janela Sobre. |
-| `Ok` / `Warn` / `Crit` | Cor das barras com uso abaixo de 50%, de 50% a 80% e acima de 80%. |
-| `Font` | Fonte. Qualquer fonte instalada no Windows (ex.: `Consolas`, `Cascadia Code`). |
-| `Opacity` | Opacidade do fundo, de `0.2` a `1`. |
-| `CornerRadius` | Arredondamento dos cantos do widget (`0` = reto). |
-| `BarRadius` | Arredondamento das barras (`0` = reto). |
-| `BorderWidth` | Espessura do contorno (`0` = sem contorno). |
-
-Cores aceitam `#RRGGBB` ou `#AARRGGBB` (com transparência). Para incluir um tema novo no próprio programa, adicione-o à lista `BuiltIn()` da classe `Themes` em `Program.cs`. Contribuições de temas são bem-vindas via pull request.
+Para incluir um tema novo, adicione-o à lista `BuiltIn()` da classe `Themes` em `Program.cs`: ele aparece automaticamente no menu ⚙ → **Tema**. Basta informar as cores que mudam; o resto vem do tema Padrão. Contribuições de temas são bem-vindas via pull request.
 
 ### Arquivos de configuração
 
@@ -172,7 +125,6 @@ Ficam em `%APPDATA%\UsageWidget\`:
 |---|---|
 | `settings.json` | Preferências do menu ⚙. Pode ser editado à mão com o widget fechado. |
 | `pos.txt` | Posição do widget na tela. |
-| `themes\*.json` | Temas personalizados (opcional). |
 
 Exemplo de `settings.json`:
 
@@ -240,7 +192,7 @@ Outro programa pode estar usando a mesma combinação. Use o cadeado ou o menu d
 
 ## Apoie o projeto ☕
 
-Se o widget for útil para você, considere pagar um café ao autor. Qualquer valor via **Pix** ajuda. A chave e o QR Code ficam na janela **Sobre / Apoie o projeto**, aberta pelo menu ⚙ ou pela bandeja.
+Se o widget for útil para você, considere pagar um café ao autor. Qualquer valor via **Pix** ajuda. A chave e o QR Code ficam na janela **Sobre / Apoie o projeto**, aberta pelo botão **☕ Apoie** no rodapé do widget, pelo menu ⚙ ou pela bandeja.
 
 Desenvolvido por [@MarleySMaia](https://github.com/MarleySMaia).
 
