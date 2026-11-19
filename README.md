@@ -97,8 +97,72 @@ Clique no **⚙** para abrir o menu:
   - CPU e memória
   - Processos que mais consomem (aparece só na visão detalhada)
 - **Ordenar processos por**: CPU ou Memória.
+- **Tema**: escolha a aparência do widget (veja [Temas](#temas)).
 
 As escolhas são salvas automaticamente e mantidas ao reabrir o widget.
+
+### Temas
+
+Temas incluídos:
+
+| Tema | Estilo |
+|---|---|
+| **Padrão** | Escuro neutro, verde/amarelo/vermelho. |
+| **Catppuccin Mocha** | Escuro em tons pastel. |
+| **Dracula** | Escuro com roxo, ciano e rosa. |
+| **Nord** | Azul-acinzentado "ártico". |
+| **Gruvbox Dark** | Escuro quente, estilo retrô. |
+| **Terminal** | Preto com verde fósforo, fonte Consolas e barras retas. |
+| **Claro** | Fundo claro, para quem usa o Windows no modo claro. |
+
+#### Criando o seu tema
+
+Não precisa recompilar:
+
+1. No menu ⚙, abra **Tema → Abrir pasta de temas…**. A pasta `%APPDATA%\UsageWidget\themes` é criada com o arquivo de exemplo `_exemplo.json.txt`.
+2. Copie o exemplo para um arquivo `.json`, por exemplo `meu-tema.json`, e ajuste as cores.
+3. Abra o menu ⚙ de novo e escolha o tema em **Tema**.
+
+Cada chave é opcional: o que você não informar usa o valor do tema Padrão. Um tema com o mesmo nome de um embutido o substitui.
+
+```json
+{
+  // Comentários são permitidos
+  "Name": "Meu Tema",
+  "Background": "#1A1A2E",
+  "Text": "#E0E0E8",
+  "Muted": "#8A8A9A",
+  "Track": "#333340",
+  "Border": "#2A2A38",
+  "Accent": "#6BA4D9",
+  "Ok": "#4ADE80",
+  "Warn": "#F59E0B",
+  "Crit": "#DC2626",
+  "Font": "Segoe UI",
+  "Opacity": 0.85,
+  "CornerRadius": 12,
+  "BarRadius": 3,
+  "BorderWidth": 1
+}
+```
+
+| Chave | Para que serve |
+|---|---|
+| `Name` | Nome exibido no menu. Se ficar vazio, usa o nome do arquivo. |
+| `Background` | Fundo do widget. |
+| `Text` | Texto principal. |
+| `Muted` | Títulos de seção, tempos de reset e rodapé. |
+| `Track` | Parte vazia das barras. |
+| `Border` | Contorno do widget. |
+| `Accent` | Links na janela Sobre. |
+| `Ok` / `Warn` / `Crit` | Cor das barras com uso abaixo de 50%, de 50% a 80% e acima de 80%. |
+| `Font` | Fonte. Qualquer fonte instalada no Windows (ex.: `Consolas`, `Cascadia Code`). |
+| `Opacity` | Opacidade do fundo, de `0.2` a `1`. |
+| `CornerRadius` | Arredondamento dos cantos do widget (`0` = reto). |
+| `BarRadius` | Arredondamento das barras (`0` = reto). |
+| `BorderWidth` | Espessura do contorno (`0` = sem contorno). |
+
+Cores aceitam `#RRGGBB` ou `#AARRGGBB` (com transparência). Para incluir um tema novo no próprio programa, adicione-o à lista `BuiltIn()` da classe `Themes` em `Program.cs`. Contribuições de temas são bem-vindas via pull request.
 
 ### Arquivos de configuração
 
@@ -108,6 +172,7 @@ Ficam em `%APPDATA%\UsageWidget\`:
 |---|---|
 | `settings.json` | Preferências do menu ⚙. Pode ser editado à mão com o widget fechado. |
 | `pos.txt` | Posição do widget na tela. |
+| `themes\*.json` | Temas personalizados (opcional). |
 
 Exemplo de `settings.json`:
 
@@ -119,7 +184,8 @@ Exemplo de `settings.json`:
   "Sys": true,
   "Processes": true,
   "SortByMemory": false,
-  "TopN": 5
+  "TopN": 5,
+  "Theme": "Padrão"
 }
 ```
 
@@ -180,16 +246,17 @@ Desenvolvido por [@MarleySMaia](https://github.com/MarleySMaia).
 
 ### Configurando o Pix (para quem mantém um fork)
 
-A janela "Sobre" mostra a chave e/ou o QR Code que estiverem configurados:
+Em `Program.cs`, na classe `AppInfo`, preencha:
 
-1. **Chave Pix**: em `Program.cs`, na classe `AppInfo`, preencha:
-   ```csharp
-   public const string PixKey = "sua-chave-aleatoria";
-   ```
-   Pode ser chave aleatória, e-mail, telefone ou CPF/CNPJ. Uma **chave aleatória** evita expor dados pessoais no repositório público.
-2. **QR Code** (opcional): gere no app do seu banco um QR de "receber qualquer valor", salve como `Assets\pix-qr.png` e recompile. O arquivo é embutido no executável automaticamente.
+```csharp
+public const string PixKey = "sua-chave-aleatoria";
+public const string PixCopiaECola = "000201...6304XXXX";
+```
 
-Sem chave e sem QR, a janela mostra "Pix ainda não configurado". Para trocar o autor ou os links, edite as outras constantes de `AppInfo`.
+1. **`PixKey`**: a chave exibida com o botão "Copiar chave Pix". Pode ser chave aleatória, e-mail, telefone ou CPF/CNPJ. Uma **chave aleatória** evita expor dados pessoais no repositório público.
+2. **`PixCopiaECola`**: o código "Pix copia e cola" gerado no app do seu banco, na opção de receber qualquer valor. O widget desenha o QR Code a partir dele, com a biblioteca [QRCoder](https://github.com/codebude/QRCoder), e oferece o botão "Copiar Pix copia e cola". O código inclui o nome e a cidade do recebedor, que aparecem para quem pagar.
+
+Deixe qualquer um deles vazio (`""`) para ocultá-lo. Sem os dois, a janela mostra "Pix ainda não configurado". Para trocar o autor ou os links, edite as outras constantes de `AppInfo`.
 
 ---
 
@@ -201,7 +268,6 @@ Para enviar o código a outra pessoa, compartilhe apenas:
 - `UsageWidget.csproj`
 - `README.md`
 - `LICENSE`
-- `Assets\pix-qr.png` (se existir)
 
 As pastas `bin`, `obj` e `publish` são geradas na compilação e podem ser apagadas. O `.gitignore` já as exclui do Git.
 

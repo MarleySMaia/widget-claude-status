@@ -33,8 +33,13 @@ static class AppInfo
     public const string Repository = "https://github.com/MarleySMaia/widget-claude-status";
 
     // Chave Pix para doações (aleatória, e-mail, telefone ou CPF/CNPJ). Vazia = não exibe a chave.
-    // QR Code opcional: salve a imagem em Assets\pix-qr.png e recompile.
-    public const string PixKey = "";
+    public const string PixKey = "d7d97945-9e61-477a-bd93-10a53cfe371a";
+
+    // "Pix copia e cola" (BR Code) gerado pelo app do banco; o QR Code é desenhado a partir dele.
+    // Vazio = sem QR Code.
+    public const string PixCopiaECola =
+        "00020126580014br.gov.bcb.pix0136d7d97945-9e61-477a-bd93-10a53cfe371a5204000053039865802BR" +
+        "5919Marley Saraiva Maia6009Sao Paulo62230519daqr3760736149205576304D254";
 
     public static string Version => typeof(AppInfo).Assembly.GetName().Version?.ToString(3) ?? "";
 
@@ -47,8 +52,9 @@ static class AppInfo
 class AboutWindow : Window
 {
     static AboutWindow? _open;
-    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
-    static readonly Brush Link = new SolidColorBrush(Color.FromRgb(0x60, 0xA5, 0xFA));
+    static Theme T => MainWindow.T;
+    static Brush Muted => T.Brush(T.Muted);
+    static Brush Link => T.Brush(T.Accent);
 
     public static void ShowSingle()
     {
@@ -66,9 +72,9 @@ class AboutWindow : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Topmost = true;
-        Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x18));
-        Foreground = Brushes.White;
-        FontFamily = new FontFamily("Segoe UI");
+        Background = T.Brush(T.Background);
+        Foreground = T.Brush(T.Text);
+        try { FontFamily = new FontFamily(T.Font); } catch { FontFamily = new FontFamily("Segoe UI"); }
         FontSize = 12;
 
         var sp = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
@@ -83,7 +89,7 @@ class AboutWindow : Window
         repo.Inlines.Add(LinkTo("Código-fonte no GitHub", AppInfo.Repository));
         sp.Children.Add(repo);
 
-        sp.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.FromArgb(0x30, 255, 255, 255)),
+        sp.Children.Add(new Border { Height = 1, Background = T.Brush(T.Border),
             Margin = new Thickness(0, 14, 0, 12) });
         sp.Children.Add(new TextBlock { Text = "☕ Gostou? Me paga um café", FontSize = 13, FontWeight = FontWeights.SemiBold });
         sp.Children.Add(new TextBlock { Text = "Qualquer valor via Pix ajuda a manter o projeto.", Foreground = Muted,
@@ -93,22 +99,23 @@ class AboutWindow : Window
         if (qr != null)
             sp.Children.Add(new Border { Background = Brushes.White, Padding = new Thickness(8), CornerRadius = new CornerRadius(6),
                 HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8),
-                Child = new System.Windows.Controls.Image { Source = qr, Width = 170, Height = 170 } });
+                Child = QrImage(qr) });
 
         if (AppInfo.PixKey.Length > 0)
         {
             sp.Children.Add(new TextBlock { Text = "Chave Pix", Foreground = Muted, FontSize = 11 });
             sp.Children.Add(new TextBox { Text = AppInfo.PixKey, IsReadOnly = true, Margin = new Thickness(0, 2, 0, 6),
-                Background = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x2A)), Foreground = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 255, 255, 255)), Padding = new Thickness(4) });
-            var copy = DarkButton("Copiar chave Pix");
-            copy.Click += (_, _) =>
-            {
-                try { Clipboard.SetText(AppInfo.PixKey); copy.Content = "Copiado! Obrigado ☕"; } catch { }
-            };
-            sp.Children.Add(copy);
+                Background = T.Brush(T.Track), Foreground = T.Brush(T.Text),
+                BorderBrush = T.Brush(T.Border), Padding = new Thickness(4) });
+            sp.Children.Add(CopyButton("Copiar chave Pix", AppInfo.PixKey));
         }
-        else if (qr == null)
+        if (AppInfo.PixCopiaECola.Length > 0)
+        {
+            var cc = CopyButton("Copiar Pix copia e cola", AppInfo.PixCopiaECola);
+            cc.Margin = new Thickness(0, 6, 0, 0);
+            sp.Children.Add(cc);
+        }
+        if (qr == null && AppInfo.PixKey.Length == 0)
         {
             sp.Children.Add(new TextBlock { Text = "Pix ainda não configurado.", Foreground = Muted, FontStyle = FontStyles.Italic });
         }
@@ -128,25 +135,43 @@ class AboutWindow : Window
         return h;
     }
 
+    static System.Windows.Controls.Image QrImage(ImageSource src)
+    {
+        var img = new System.Windows.Controls.Image { Source = src, Width = 180, Height = 180 };
+        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.NearestNeighbor); // módulos nítidos
+        return img;
+    }
+
+    static Button CopyButton(string text, string value)
+    {
+        var b = DarkButton(text);
+        b.Click += (_, _) => { try { Clipboard.SetText(value); b.Content = "Copiado! Obrigado ☕"; } catch { } };
+        return b;
+    }
+
     static Button DarkButton(string text) => new()
     {
         Content = text, Padding = new Thickness(10, 5, 10, 5), Cursor = Cursors.Hand,
-        Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x33)), Foreground = Brushes.White,
-        BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 255, 255, 255)),
+        Background = T.Brush(T.Track), Foreground = T.Brush(T.Text), BorderBrush = T.Brush(T.Border),
     };
 
     static ImageSource? LoadQr()
     {
+        if (AppInfo.PixCopiaECola.Length == 0) return null;
         try
         {
+            using var gen = new QRCoder.QRCodeGenerator();
+            using var data = gen.CreateQrCode(AppInfo.PixCopiaECola, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var png = new QRCoder.PngByteQRCode(data).GetGraphic(10);
             var img = new System.Windows.Media.Imaging.BitmapImage();
             img.BeginInit();
-            img.UriSource = new Uri("pack://application:,,,/Assets/pix-qr.png");
+            img.StreamSource = new MemoryStream(png);
             img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
             img.EndInit();
+            img.Freeze();
             return img;
         }
-        catch { return null; } // sem QR Code embutido
+        catch { return null; }
     }
 }
 
@@ -174,6 +199,7 @@ class Settings
     public bool Processes { get; set; } = true;
     public bool SortByMemory { get; set; }
     public int TopN { get; set; } = 5;
+    public string Theme { get; set; } = "Padrão";
 
     static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UsageWidget", "settings.json");
@@ -190,6 +216,112 @@ class Settings
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
             File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch { }
+    }
+}
+
+// ---------- Temas ----------
+// Cada tema é uma paleta com as mesmas chaves. Os valores padrão abaixo são os do tema "Padrão",
+// então um tema em JSON só precisa informar o que muda.
+class Theme
+{
+    public string Name { get; set; } = "Padrão";
+    public string Background { get; set; } = "#141418"; // fundo do widget
+    public string Text { get; set; } = "#FFFFFF";       // texto principal
+    public string Muted { get; set; } = "#9CA3AF";      // títulos de seção, tempos, rodapé
+    public string Track { get; set; } = "#33FFFFFF";    // trilho vazio das barras
+    public string Border { get; set; } = "#30FFFFFF";   // contorno do widget
+    public string Accent { get; set; } = "#60A5FA";     // links
+    public string Ok { get; set; } = "#4ADE80";         // uso < 50%
+    public string Warn { get; set; } = "#FBBF24";       // uso 50–80%
+    public string Crit { get; set; } = "#F87171";       // uso > 80%
+    public string Font { get; set; } = "Segoe UI";
+    public double Opacity { get; set; } = 0.85;         // opacidade do fundo (0.2 a 1)
+    public double CornerRadius { get; set; } = 12;      // cantos do widget
+    public double BarRadius { get; set; } = 3;          // cantos das barras (0 = retas)
+    public double BorderWidth { get; set; } = 1;
+
+    public static Color ToColor(string hex, Color fallback)
+    {
+        try { return (Color)ColorConverter.ConvertFromString(hex); } catch { return fallback; }
+    }
+
+    public Brush Brush(string hex)
+    {
+        var b = new SolidColorBrush(ToColor(hex, Colors.Magenta));
+        b.Freeze();
+        return b;
+    }
+}
+
+static class Themes
+{
+    public static readonly string Folder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UsageWidget", "themes");
+
+    static List<Theme> BuiltIn() => new()
+    {
+        new Theme(),
+        new Theme { Name = "Catppuccin Mocha", Background = "#1E1E2E", Text = "#CDD6F4", Muted = "#A6ADC8",
+            Track = "#313244", Border = "#45475A", Accent = "#74C7EC", Ok = "#A6E3A1", Warn = "#FAB387", Crit = "#F38BA8" },
+        new Theme { Name = "Dracula", Background = "#282A36", Text = "#F8F8F2", Muted = "#BFBFBF",
+            Track = "#44475A", Border = "#44475A", Accent = "#8BE9FD", Ok = "#50FA7B", Warn = "#FFB86C", Crit = "#FF5555" },
+        new Theme { Name = "Nord", Background = "#2E3440", Text = "#ECEFF4", Muted = "#D8DEE9",
+            Track = "#3B4252", Border = "#434C5E", Accent = "#88C0D0", Ok = "#A3BE8C", Warn = "#EBCB8B", Crit = "#BF616A" },
+        new Theme { Name = "Gruvbox Dark", Background = "#282828", Text = "#EBDBB2", Muted = "#BDAE93",
+            Track = "#3C3836", Border = "#504945", Accent = "#83A598", Ok = "#B8BB26", Warn = "#FABD2F", Crit = "#FB4934" },
+        new Theme { Name = "Terminal", Background = "#0C0C0C", Text = "#33FF66", Muted = "#1F9D46",
+            Track = "#16301C", Border = "#1F9D46", Accent = "#33FF66", Ok = "#33FF66", Warn = "#FFD75F", Crit = "#FF5F5F",
+            Font = "Consolas", Opacity = 0.92, CornerRadius = 4, BarRadius = 0 },
+        new Theme { Name = "Claro", Background = "#F5F5F7", Text = "#1F2328", Muted = "#6B7280",
+            Track = "#22000000", Border = "#26000000", Accent = "#2563EB", Ok = "#16A34A", Warn = "#D97706", Crit = "#DC2626",
+            Opacity = 0.93 },
+    };
+
+    static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true, WriteIndented = true,
+    };
+
+    // Temas embutidos + arquivos *.json da pasta de temas (um tema com o mesmo nome substitui o embutido).
+    public static List<Theme> All()
+    {
+        var list = BuiltIn();
+        try
+        {
+            if (Directory.Exists(Folder))
+                foreach (var f in Directory.GetFiles(Folder, "*.json").OrderBy(f => f))
+                {
+                    try
+                    {
+                        var t = JsonSerializer.Deserialize<Theme>(File.ReadAllText(f), JsonOpts);
+                        if (t == null) continue;
+                        if (string.IsNullOrWhiteSpace(t.Name)) t.Name = Path.GetFileNameWithoutExtension(f);
+                        list.RemoveAll(x => x.Name == t.Name);
+                        list.Add(t);
+                    }
+                    catch { } // arquivo inválido: ignora
+                }
+        }
+        catch { }
+        return list;
+    }
+
+    public static Theme Find(string name) => All().FirstOrDefault(t => t.Name == name) ?? new Theme();
+
+    public static void OpenFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(Folder);
+            var example = Path.Combine(Folder, "_exemplo.json.txt");
+            if (!File.Exists(example))
+                File.WriteAllText(example, "// Renomeie para 'meu-tema.json', ajuste as cores e escolha o tema no menu ⚙.\n" +
+                    "// Campos omitidos usam os valores do tema Padrão.\n" +
+                    JsonSerializer.Serialize(new Theme { Name = "Meu Tema" }, JsonOpts));
+            Process.Start(new ProcessStartInfo(Folder) { UseShellExecute = true });
         }
         catch { }
     }
@@ -288,7 +420,9 @@ class MainWindow : Window
     DateTime? _updated;
     IntPtr _hwnd;
     readonly StackPanel _body = new(), _buttons = new() { Orientation = Orientation.Horizontal };
-    readonly TextBlock _lock = new(), _gear = new(), _footer = new();
+    readonly TextBlock _lock = new(), _gear = new(), _footer = new(), _title = new();
+    readonly Border _frame = new();
+    public static Theme T { get; private set; } = new();
     System.Windows.Forms.NotifyIcon _tray = null!;
     System.Windows.Forms.ToolStripMenuItem _ghostItem = null!;
 
@@ -304,8 +438,9 @@ class MainWindow : Window
         SizeToContent = SizeToContent.WidthAndHeight;
 
         var top = new Grid();
-        top.Children.Add(new TextBlock { Text = "USO", Foreground = Gray, FontSize = 10, FontWeight = FontWeights.Bold,
-            VerticalAlignment = VerticalAlignment.Center });
+        _title.Text = "USO"; _title.FontSize = 10; _title.FontWeight = FontWeights.Bold;
+        _title.VerticalAlignment = VerticalAlignment.Center;
+        top.Children.Add(_title);
         StyleButton(_gear, "⚙", "Configurações");
         _gear.MouseLeftButtonDown += (_, e) => { OpenMenu(); e.Handled = true; };
         StyleButton(_lock, "🔓", "Travar/destravar (Ctrl+Alt+U)");
@@ -315,30 +450,22 @@ class MainWindow : Window
         _buttons.Children.Add(_lock);
         top.Children.Add(_buttons);
 
-        _footer.Foreground = Gray; _footer.FontSize = 9; _footer.Margin = new Thickness(0, 8, 0, 0);
+        _footer.FontSize = 9; _footer.Margin = new Thickness(0, 8, 0, 0);
 
         var root = new StackPanel();
         root.Children.Add(top);
         root.Children.Add(_body);
         root.Children.Add(_footer);
 
-        Content = new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x14, 0x14, 0x18)), // 85%
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(12, 8, 12, 8),
-            Child = root,
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 255, 255, 255)),
-            BorderThickness = new Thickness(1),
-        };
-        Foreground = Brushes.White;
-        FontFamily = new FontFamily("Segoe UI");
+        _frame.Padding = new Thickness(12, 8, 12, 8);
+        _frame.Child = root;
+        Content = _frame;
         FontSize = 11;
 
         MouseLeftButtonDown += (_, _) => { _anchored = false; try { DragMove(); SavePos(); } catch { } };
 
         BuildTray();
-        Render();
+        ApplyTheme(); // também desenha o conteúdo
         SetGhost(false);
 
         var refresh = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
@@ -381,6 +508,19 @@ class MainWindow : Window
         cm.Items.Add(Title("Visão"));
         cm.Items.Add(Item("Resumida", _s.Compact, () => _s.Compact = true));
         cm.Items.Add(Item("Detalhada", !_s.Compact, () => _s.Compact = false));
+        cm.Items.Add(new Separator());
+        var themes = new MenuItem { Header = "Tema: " + T.Name };
+        foreach (var t in Themes.All())
+        {
+            var mi = new MenuItem { Header = t.Name, IsCheckable = true, IsChecked = t.Name == T.Name };
+            mi.Click += (_, _) => { _s.Theme = t.Name; _s.Save(); ApplyTheme(); };
+            themes.Items.Add(mi);
+        }
+        themes.Items.Add(new Separator());
+        var folder = new MenuItem { Header = "Abrir pasta de temas…" };
+        folder.Click += (_, _) => Themes.OpenFolder();
+        themes.Items.Add(folder);
+        cm.Items.Add(themes);
         cm.Items.Add(new Separator());
         cm.Items.Add(Title("Mostrar"));
         cm.Items.Add(Item("Claude Code", _s.Claude, () => _s.Claude = !_s.Claude));
@@ -652,14 +792,33 @@ class MainWindow : Window
     }
 
     // ---------- Desenho ----------
-    static readonly Brush Gray = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF));
-    static readonly Brush Track = new SolidColorBrush(Color.FromArgb(0x33, 255, 255, 255));
+    static Brush Gray = Brushes.Gray, Track = Brushes.DimGray;
+    static Color _ok, _warn, _crit;
     const double BarW = 110;
 
-    static Color UsageColor(double used) =>
-        used < 50 ? Color.FromRgb(0x4A, 0xDE, 0x80)      // verde
-        : used < 80 ? Color.FromRgb(0xFB, 0xBF, 0x24)    // amarelo
-        : Color.FromRgb(0xF8, 0x71, 0x71);               // vermelho
+    static Color UsageColor(double used) => used < 50 ? _ok : used < 80 ? _warn : _crit;
+
+    void ApplyTheme()
+    {
+        T = Themes.Find(_s.Theme);
+        Gray = T.Brush(T.Muted);
+        Track = T.Brush(T.Track);
+        _ok = Theme.ToColor(T.Ok, Colors.LimeGreen);
+        _warn = Theme.ToColor(T.Warn, Colors.Gold);
+        _crit = Theme.ToColor(T.Crit, Colors.Tomato);
+
+        var bg = Theme.ToColor(T.Background, Color.FromRgb(0x14, 0x14, 0x18));
+        bg.A = (byte)(Math.Clamp(T.Opacity, 0.2, 1) * 255);
+        _frame.Background = new SolidColorBrush(bg);
+        _frame.CornerRadius = new CornerRadius(Math.Max(0, T.CornerRadius));
+        _frame.BorderBrush = T.Brush(T.Border);
+        _frame.BorderThickness = new Thickness(Math.Max(0, T.BorderWidth));
+        Foreground = T.Brush(T.Text);
+        try { FontFamily = new FontFamily(T.Font); } catch { FontFamily = new FontFamily("Segoe UI"); }
+        _title.Foreground = Gray;
+        _footer.Foreground = Gray;
+        Render();
+    }
 
     void Render()
     {
@@ -726,9 +885,10 @@ class MainWindow : Window
 
     static Border Bar(double used, double width, double height = 6)
     {
-        var fill = new Border { Width = Math.Clamp(used, 0, 100) / 100 * width, CornerRadius = new CornerRadius(3),
+        var r = new CornerRadius(Math.Max(0, T.BarRadius));
+        var fill = new Border { Width = Math.Clamp(used, 0, 100) / 100 * width, CornerRadius = r,
             Background = new SolidColorBrush(UsageColor(used)), HorizontalAlignment = HorizontalAlignment.Left };
-        return new Border { Width = width, Height = height, CornerRadius = new CornerRadius(3), Background = Track,
+        return new Border { Width = width, Height = height, CornerRadius = r, Background = Track,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Child = fill };
     }
 

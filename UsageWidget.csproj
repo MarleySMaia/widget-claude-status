@@ -18,9 +18,9 @@
     <Authors>MarleySMaia</Authors>
   </PropertyGroup>
 
-  <!-- QR Code do Pix (opcional): coloque a imagem em Assets\pix-qr.png -->
-  <ItemGroup Condition="Exists('Assets\pix-qr.png')">
-    <Resource Include="Assets\pix-qr.png" />
+  <ItemGroup>
+    <!-- Gera o QR Code do Pix a partir do "Pix copia e cola" (MIT) -->
+    <PackageReference Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 
 </Project>
