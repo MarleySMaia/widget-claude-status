@@ -8,6 +8,19 @@ Widget flutuante para Windows 11 que fica sempre por cima das outras janelas e m
 
 As cores das barras mostram a situação: **verde** abaixo de 50%, **amarelo** de 50% a 80% e **vermelho** acima de 80%.
 
+<table>
+  <tr>
+    <th>Visão detalhada</th>
+    <th>Visão resumida</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/screenshots/detalhada.png" alt="Widget na visão detalhada, com uso do Claude Code, Antigravity, CPU, RAM e processos" width="346"></td>
+    <td valign="top"><img src="docs/screenshots/resumida.png" alt="Widget na visão resumida, com uma linha por fonte e mini barras" width="330"></td>
+  </tr>
+</table>
+
+<sub>Imagens com dados de demonstração.</sub>
+
 ---
 
 ## Requisitos
@@ -102,6 +115,8 @@ Clique no **⚙** para abrir o menu:
 As escolhas são salvas automaticamente e mantidas ao reabrir o widget.
 
 ### Temas
+
+![Os 7 temas incluídos, na visão resumida](docs/screenshots/temas.png)
 
 Temas incluídos:
 
