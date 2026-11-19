@@ -196,20 +196,6 @@ Se o widget for útil para você, considere pagar um café ao autor. Qualquer va
 
 Desenvolvido por [@MarleySMaia](https://github.com/MarleySMaia).
 
-### Configurando o Pix (para quem mantém um fork)
-
-Em `Program.cs`, na classe `AppInfo`, preencha:
-
-```csharp
-public const string PixKey = "sua-chave-aleatoria";
-public const string PixCopiaECola = "000201...6304XXXX";
-```
-
-1. **`PixKey`**: a chave exibida com o botão "Copiar chave Pix". Pode ser chave aleatória, e-mail, telefone ou CPF/CNPJ. Uma **chave aleatória** evita expor dados pessoais no repositório público.
-2. **`PixCopiaECola`**: o código "Pix copia e cola" gerado no app do seu banco, na opção de receber qualquer valor. O widget desenha o QR Code a partir dele, com a biblioteca [QRCoder](https://github.com/codebude/QRCoder), e oferece o botão "Copiar Pix copia e cola". O código inclui o nome e a cidade do recebedor, que aparecem para quem pagar.
-
-Deixe qualquer um deles vazio (`""`) para ocultá-lo. Sem os dois, a janela mostra "Pix ainda não configurado". Para trocar o autor ou os links, edite as outras constantes de `AppInfo`.
-
 ---
 
 ## Compartilhando o projeto
