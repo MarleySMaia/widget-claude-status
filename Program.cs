@@ -848,7 +848,7 @@ class MainWindow : Window
         if (_s.Claude && _claudeFail) status += " · Claude falhou";
         if (_s.Antigravity && _agyFail) status += " · Antigravity falhou";
         _footer.Text = status;
-        _footer.Visibility = _s.Compact || (!_s.Claude && !_s.Antigravity) ? Visibility.Collapsed : Visibility.Visible;
+        _footer.Visibility = !_s.Claude && !_s.Antigravity ? Visibility.Collapsed : Visibility.Visible;
     }
 
     const double GB = 1024.0 * 1024 * 1024;
