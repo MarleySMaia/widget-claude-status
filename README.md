@@ -5,6 +5,8 @@ Widget flutuante para Windows 11 que fica sempre por cima das outras janelas e m
 - **Claude Code**: uso da sessão (5h) e da semana, com tempo até o reset.
 - **Google Antigravity**: uso de 5h e semanal de cada grupo de modelos (Gemini e Claude + GPT).
 - **Sistema**: uso de CPU e memória RAM, e os processos que mais consomem recursos.
+- **Áudio**: volume e mudo da saída padrão (fones, caixas) e do microfone, com controle pelo próprio widget.
+- **Bluetooth**: dispositivos conectados, com a bateria de quem informa esse dado ao Windows (fones, teclados, mouses).
 
 As cores das barras mostram a situação: **verde** abaixo de 50%, **amarelo** de 50% a 80% e **vermelho** acima de 80%.
 
@@ -90,6 +92,8 @@ Dê dois cliques em `publish\UsageWidget.exe`. O widget aparece no canto superio
 | Mover o widget | Arraste com o botão esquerdo do mouse. A posição é lembrada. |
 | Travar (modo fantasma) | Clique no cadeado 🔓 ou use `Ctrl + Alt + U`. Os cliques passam a atravessar o widget para as janelas de trás. |
 | Destravar | Passe o mouse sobre o cadeado 🔒 e clique, ou use `Ctrl + Alt + U`. |
+| Ajustar o volume | Gire a roda do mouse sobre a linha **Saída** ou **Mic** (na visão resumida, sobre a linha **Áudio**). |
+| Ativar ou tirar o mudo | Clique na linha **Saída** ou **Mic** (na visão resumida, na linha **Áudio**). |
 | Abrir configurações | Clique no ⚙. Funciona também no modo fantasma. |
 | Mostrar / ocultar | Clique com o botão esquerdo no ícone da bandeja. |
 | Atualizar agora / Sair | Clique com o botão direito no ícone da bandeja. |
@@ -109,6 +113,8 @@ Clique no **⚙** para abrir o menu:
   - Antigravity
   - CPU e memória
   - Processos que mais consomem (aparece só na visão detalhada)
+  - Áudio (volume e microfone)
+  - Bluetooth (conexão e bateria)
 - **Ordenar processos por**: CPU ou Memória.
 - **Tema**: escolha a aparência do widget (veja [Temas](#temas)).
 
@@ -152,7 +158,9 @@ Exemplo de `settings.json`:
   "Processes": true,
   "SortByMemory": false,
   "TopN": 5,
-  "Theme": "Padrão"
+  "Theme": "Padrão",
+  "Audio": true,
+  "Bluetooth": true
 }
 ```
 
@@ -168,6 +176,8 @@ Para voltar às configurações padrão, feche o widget e apague a pasta `%APPDA
 |---|---|
 | Claude Code e Antigravity | a cada 5 minutos |
 | CPU, memória e processos | a cada 3 segundos |
+| Volume e mudo | na hora (o Windows avisa o widget a cada mudança) |
+| Dispositivos Bluetooth | a cada 10 segundos |
 | Contagem regressiva do reset | a cada 30 segundos |
 
 Os dados de IA vêm dos comandos `claude -p "/usage"` e `agy -p "/usage"`, executados em segundo plano. Desligar uma seção no menu também interrompe essa consulta.
@@ -188,6 +198,9 @@ Se der erro, faça login novamente na ferramenta (`claude auth login` no Claude 
 
 **O widget sumiu da tela.**
 Clique no ícone da bandeja para mostrá-lo. Se ele estiver fora da área visível, por exemplo depois de desconectar um monitor, feche o widget, apague `%APPDATA%\UsageWidget\pos.txt` e abra de novo.
+
+**Meu fone Bluetooth aparece como "conectado", sem a bateria.**
+O widget mostra a bateria que o dispositivo informa ao Windows, a mesma que aparece em *Configurações → Bluetooth e dispositivos*. Alguns modelos não informam, e outros só informam quando conectados como headset (perfil Hands-Free).
 
 **O atalho `Ctrl + Alt + U` não funciona.**
 Outro programa pode estar usando a mesma combinação. Use o cadeado ou o menu da bandeja.

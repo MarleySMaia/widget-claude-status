@@ -200,6 +200,8 @@ class Settings
     public bool SortByMemory { get; set; }
     public int TopN { get; set; } = 5;
     public string Theme { get; set; } = "Padrão";
+    public bool Audio { get; set; } = true;
+    public bool Bluetooth { get; set; } = true;
 
     static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UsageWidget", "settings.json");
@@ -280,6 +282,172 @@ static class Themes
     public static readonly List<Theme> All = BuiltIn();
 
     public static Theme Find(string name) => All.FirstOrDefault(t => t.Name == name) ?? All[0];
+}
+
+// ---------- Áudio (saída e microfone padrão) ----------
+public record AudioSnap(string OutName, double OutVol, bool OutMute, string? MicName, double MicVol, bool MicMute);
+
+// Orientado a eventos: os dispositivos padrão são obtidos uma vez e reaproveitados; o Windows avisa
+// quando o volume/mudo muda (VolumeChanged) ou quando o dispositivo padrão troca (DefaultChanged).
+// Os eventos chegam em outra thread — quem assina deve repassar para a thread da interface.
+[ComVisible(true)]
+public class AudioMon : NAudio.CoreAudioApi.Interfaces.IMMNotificationClient
+{
+    readonly NAudio.CoreAudioApi.MMDeviceEnumerator _en = new();
+    NAudio.CoreAudioApi.MMDevice? _out, _mic;
+    string? _outName, _micName;
+
+    public event Action? VolumeChanged;
+    public event Action? DefaultChanged;
+
+    public AudioMon()
+    {
+        try { _en.RegisterEndpointNotificationCallback(this); } catch { }
+        Acquire();
+    }
+
+    NAudio.CoreAudioApi.MMDevice? Default(bool mic)
+    {
+        var flow = mic ? NAudio.CoreAudioApi.DataFlow.Capture : NAudio.CoreAudioApi.DataFlow.Render;
+        return _en.HasDefaultAudioEndpoint(flow, NAudio.CoreAudioApi.Role.Multimedia)
+            ? _en.GetDefaultAudioEndpoint(flow, NAudio.CoreAudioApi.Role.Multimedia) : null;
+    }
+
+    void OnVolume(NAudio.CoreAudioApi.AudioVolumeNotificationData _) => VolumeChanged?.Invoke();
+
+    // (Re)obtém os dispositivos padrão. Chamar na thread da interface.
+    public void Acquire()
+    {
+        try
+        {
+            if (_out != null) { _out.AudioEndpointVolume.OnVolumeNotification -= OnVolume; _out.Dispose(); }
+            if (_mic != null) { _mic.AudioEndpointVolume.OnVolumeNotification -= OnVolume; _mic.Dispose(); }
+        }
+        catch { }
+        _out = _mic = null;
+        try
+        {
+            _out = Default(false);
+            _mic = Default(true);
+            _outName = _out?.FriendlyName;
+            _micName = _mic?.FriendlyName;
+            if (_out != null) _out.AudioEndpointVolume.OnVolumeNotification += OnVolume;
+            if (_mic != null) _mic.AudioEndpointVolume.OnVolumeNotification += OnVolume;
+        }
+        catch { }
+    }
+
+    public AudioSnap? Read()
+    {
+        try
+        {
+            var o = _out?.AudioEndpointVolume;
+            var m = _mic?.AudioEndpointVolume;
+            return new AudioSnap(
+                _outName ?? "Sem saída de áudio",
+                Math.Round((o?.MasterVolumeLevelScalar ?? 0) * 100), o?.Mute ?? false,
+                _micName,
+                Math.Round((m?.MasterVolumeLevelScalar ?? 0) * 100), m?.Mute ?? false);
+        }
+        catch { return null; }
+    }
+
+    public void ChangeVolume(bool mic, double deltaPct)
+    {
+        try
+        {
+            var v = (mic ? _mic : _out)?.AudioEndpointVolume;
+            if (v == null) return;
+            v.MasterVolumeLevelScalar = (float)Math.Clamp(v.MasterVolumeLevelScalar + deltaPct / 100, 0, 1);
+            if (deltaPct > 0 && v.Mute) v.Mute = false;
+        }
+        catch { }
+    }
+
+    public void ToggleMute(bool mic)
+    {
+        try { var v = (mic ? _mic : _out)?.AudioEndpointVolume; if (v != null) v.Mute = !v.Mute; }
+        catch { }
+    }
+
+    // ----- IMMNotificationClient -----
+    public void OnDefaultDeviceChanged(NAudio.CoreAudioApi.DataFlow flow, NAudio.CoreAudioApi.Role role, string defaultDeviceId)
+    {
+        if (role == NAudio.CoreAudioApi.Role.Multimedia) DefaultChanged?.Invoke();
+    }
+    public void OnDeviceStateChanged(string deviceId, NAudio.CoreAudioApi.DeviceState newState) => DefaultChanged?.Invoke();
+    public void OnDeviceAdded(string pwstrDeviceId) { }
+    public void OnDeviceRemoved(string deviceId) { }
+    public void OnPropertyValueChanged(string pwstrDeviceId, NAudio.CoreAudioApi.PropertyKey key) { }
+
+    // "Fones de ouvido (2- JBL TUNE510BT)" -> "JBL TUNE510BT"
+    public static string ShortName(string name)
+    {
+        var m = Regex.Match(name, @"\((?:\d+-\s*)?(.+)\)\s*$");
+        return m.Success ? m.Groups[1].Value : name;
+    }
+}
+
+// ---------- Bluetooth (dispositivos pareados, conexão e bateria) ----------
+record BtDevice(string Name, bool Connected, int? Battery);
+
+static class BtMon
+{
+    [StructLayout(LayoutKind.Sequential)] struct DEVPROPKEY { public Guid fmtid; public uint pid; }
+    [DllImport("CfgMgr32.dll", CharSet = CharSet.Unicode)] static extern int CM_Get_Device_ID_List_SizeW(out uint len, string filter, uint flags);
+    [DllImport("CfgMgr32.dll", CharSet = CharSet.Unicode)] static extern int CM_Get_Device_ID_ListW(string filter, char[] buffer, uint len, uint flags);
+    [DllImport("CfgMgr32.dll", CharSet = CharSet.Unicode)] static extern int CM_Locate_DevNodeW(out uint devInst, string id, uint flags);
+    [DllImport("CfgMgr32.dll")] static extern int CM_Get_DevNode_PropertyW(uint devInst, ref DEVPROPKEY key, out uint type, byte[]? buffer, ref uint size, uint flags);
+    const uint CM_GETIDLIST_FILTER_ENUMERATOR = 1;
+
+    static DEVPROPKEY Key(string g, uint pid) => new() { fmtid = new Guid(g), pid = pid };
+    static readonly DEVPROPKEY FriendlyName = Key("a45c254e-df1c-4efd-8020-67d146a850e0", 14);
+    static readonly DEVPROPKEY ContainerId = Key("8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c", 2);
+    static readonly DEVPROPKEY Battery = Key("104ea319-6ee2-4701-bd47-8ddbf425bbe5", 2);
+    static readonly DEVPROPKEY Connected = Key("83da6326-97a6-4088-9453-a1923f573b29", 15);
+
+    static byte[]? Prop(uint dev, DEVPROPKEY key)
+    {
+        uint size = 0;
+        CM_Get_DevNode_PropertyW(dev, ref key, out _, null, ref size, 0);
+        if (size == 0) return null;
+        var buf = new byte[size];
+        return CM_Get_DevNode_PropertyW(dev, ref key, out _, buf, ref size, 0) == 0 ? buf : null;
+    }
+
+    static IEnumerable<string> Ids(string enumerator)
+    {
+        if (CM_Get_Device_ID_List_SizeW(out var len, enumerator, CM_GETIDLIST_FILTER_ENUMERATOR) != 0 || len == 0) yield break;
+        var buf = new char[len];
+        if (CM_Get_Device_ID_ListW(enumerator, buf, len, CM_GETIDLIST_FILTER_ENUMERATOR) != 0) yield break;
+        foreach (var id in new string(buf).Split('\0', StringSplitOptions.RemoveEmptyEntries)) yield return id;
+    }
+
+    public static List<BtDevice> Read()
+    {
+        var byContainer = new Dictionary<Guid, (string? name, bool conn, int? bat)>();
+        foreach (var id in Ids("BTHENUM").Concat(Ids("BTHLE")))
+        {
+            if (CM_Locate_DevNodeW(out var dev, id, 0) != 0) continue; // não presente
+            var c = Prop(dev, ContainerId);
+            if (c == null || c.Length < 16) continue;
+            var container = new Guid(c.AsSpan(0, 16));
+            byContainer.TryGetValue(container, out var e);
+
+            bool isDevice = id.StartsWith(@"BTHENUM\DEV_", StringComparison.OrdinalIgnoreCase)
+                         || id.StartsWith(@"BTHLE\DEV_", StringComparison.OrdinalIgnoreCase);
+            if (isDevice && e.name == null && Prop(dev, FriendlyName) is { } n)
+                e.name = Encoding.Unicode.GetString(n).TrimEnd('\0');
+            if (Prop(dev, Connected) is { Length: > 0 } cn && cn[0] != 0) e.conn = true;
+            if (e.bat == null && Prop(dev, Battery) is { Length: > 0 } b && b[0] <= 100) e.bat = b[0];
+            byContainer[container] = e;
+        }
+        return byContainer.Values.Where(v => !string.IsNullOrWhiteSpace(v.name))
+            .GroupBy(v => v.name!)
+            .Select(g => new BtDevice(g.Key, g.Any(v => v.conn), g.Max(v => v.bat)))
+            .OrderByDescending(d => d.Connected).ThenBy(d => d.Name)
+            .ToList();
+    }
 }
 
 // ---------- Monitor do sistema (CPU, RAM, processos) ----------
@@ -370,6 +538,10 @@ class MainWindow : Window
     readonly Settings _s = Settings.Load();
     readonly SysMon _mon = new();
     SysSnap? _snap;
+    AudioMon? _audioMon;
+    AudioSnap? _audio;
+    List<BtDevice>? _bt;
+    bool _btBusy;
     List<Section> _claude = new(), _agy = new();
     bool _claudeFail, _agyFail, _busy, _sysBusy, _ghost;
     DateTime? _updated;
@@ -455,7 +627,44 @@ class MainWindow : Window
         var sys = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         sys.Tick += async (_, _) => await SampleSysAsync();
         sys.Start();
-        Loaded += async (_, _) => { PlaceInitial(); await SampleSysAsync(); await RefreshAsync(); };
+        // Leitura de segurança; as mudanças de volume chegam por evento (ver AudioMon).
+        var audio = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        audio.Tick += (_, _) => ReadAudio();
+        audio.Start();
+        var bt = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        bt.Tick += async (_, _) => await SampleBtAsync();
+        bt.Start();
+        Loaded += async (_, _) =>
+        {
+            PlaceInitial(); ReadAudio(); await SampleBtAsync(); await SampleSysAsync(); await RefreshAsync();
+        };
+    }
+
+    // Lê volume/mudo da saída e do microfone padrão; só redesenha se algo mudou.
+    void ReadAudio(bool force = false)
+    {
+        if (!_s.Audio || !IsVisible) return;
+        if (_audioMon == null)
+        {
+            _audioMon = new AudioMon();
+            _audioMon.VolumeChanged += () => Dispatcher.BeginInvoke(() => ReadAudio());
+            _audioMon.DefaultChanged += () => Dispatcher.BeginInvoke(() => { _audioMon.Acquire(); ReadAudio(force: true); });
+        }
+        var a = _audioMon.Read();
+        if (force || a != _audio) { _audio = a; Render(); }
+    }
+
+    async Task SampleBtAsync()
+    {
+        if (!_s.Bluetooth || !IsVisible || _btBusy) return;
+        _btBusy = true;
+        try
+        {
+            var list = await Task.Run(BtMon.Read);
+            if (_bt == null || !list.SequenceEqual(_bt)) { _bt = list; Render(); }
+        }
+        catch { }
+        finally { _btBusy = false; }
     }
 
     static void StyleButton(TextBlock b, string text, string tip)
@@ -498,6 +707,8 @@ class MainWindow : Window
         cm.Items.Add(Item("Antigravity", _s.Antigravity, () => _s.Antigravity = !_s.Antigravity));
         cm.Items.Add(Item("CPU e memória", _s.Sys, () => _s.Sys = !_s.Sys));
         cm.Items.Add(Item("Processos que mais consomem (detalhada)", _s.Processes, () => _s.Processes = !_s.Processes));
+        cm.Items.Add(Item("Áudio (volume e microfone)", _s.Audio, () => _s.Audio = !_s.Audio));
+        cm.Items.Add(Item("Bluetooth (conexão e bateria)", _s.Bluetooth, () => _s.Bluetooth = !_s.Bluetooth));
         cm.Items.Add(new Separator());
         cm.Items.Add(Title("Ordenar processos por"));
         cm.Items.Add(Item("CPU", !_s.SortByMemory, () => _s.SortByMemory = false));
@@ -517,6 +728,8 @@ class MainWindow : Window
         Render();
         if ((_s.Claude && _claude.Count == 0) || (_s.Antigravity && _agy.Count == 0)) await RefreshAsync();
         if (_s.Sys) await SampleSysAsync();
+        if (_s.Audio) ReadAudio(force: true);
+        if (_s.Bluetooth) await SampleBtAsync();
     }
 
     // ---------- Janela / Win32 ----------
@@ -811,9 +1024,23 @@ class MainWindow : Window
         {
             foreach (var s in ai)
                 _body.Children.Add(CompactRow(ShortTitle(s.Title),
-                    s.Rows.Select(r => (r.Label == "5h" ? "5h" : "sem", r.Used)).ToList()));
+                    s.Rows.Select(r => new Pair(r.Label == "5h" ? "5h" : "sem", r.Used)).ToList()));
             if (sys)
-                _body.Children.Add(CompactRow("PC", new() { ("CPU", _snap!.Cpu), ("RAM", memPct) }));
+                _body.Children.Add(CompactRow("PC", new() { new("CPU", _snap!.Cpu), new("RAM", memPct) }));
+            if (_s.Audio && _audio is { } a)
+            {
+                var mic = a.MicName != null ? VolPair("Mic", a.MicVol, a.MicMute) : new Pair("Mic", 0, MutedColor, "—");
+                var row = (Grid)CompactRow("Áudio", new() { VolPair("Vol", a.OutVol, a.OutMute), mic });
+                row.Background = Brushes.Transparent;
+                row.Cursor = Cursors.Hand;
+                row.ToolTip = $"{a.OutName}\nClique: mudo · Roda do mouse: volume";
+                row.MouseLeftButtonDown += (_, e) => { _audioMon?.ToggleMute(false); ReadAudio(force: true); e.Handled = true; };
+                row.MouseWheel += (_, e) => { _audioMon?.ChangeVolume(false, e.Delta / 120.0 * 2); ReadAudio(force: true); e.Handled = true; };
+                _body.Children.Add(row);
+            }
+            if (_s.Bluetooth && _bt != null)
+                foreach (var d in _bt.Where(d => d.Connected))
+                    _body.Children.Add(CompactRow(d.Name, new() { BatPair(d.Battery) }));
             if (_body.Children.Count > 0) ((FrameworkElement)_body.Children[0]).Margin = new Thickness(0, 6, 0, 1);
         }
         else
@@ -838,10 +1065,29 @@ class MainWindow : Window
                     foreach (var p in top) _body.Children.Add(ProcRow(p));
                 }
             }
+            if (_s.Audio && _audio is { } a)
+            {
+                _body.Children.Add(Header("Áudio · clique: mudo · roda do mouse: volume"));
+                _body.Children.Add(AudioRow("Saída", a.OutName, a.OutVol, a.OutMute, mic: false));
+                if (a.MicName != null) _body.Children.Add(AudioRow("Mic", a.MicName, a.MicVol, a.MicMute, mic: true));
+            }
+            if (_s.Bluetooth && _bt != null)
+            {
+                _body.Children.Add(Header("Bluetooth"));
+                var on = _bt.Where(d => d.Connected).ToList();
+                var off = _bt.Where(d => !d.Connected).ToList();
+                foreach (var d in on) _body.Children.Add(BtRow(d));
+                if (on.Count == 0)
+                    _body.Children.Add(new TextBlock { Text = "Nenhum dispositivo conectado", Foreground = Gray, FontSize = 10 });
+                if (off.Count > 0)
+                    _body.Children.Add(new TextBlock { Text = $"+{off.Count} pareado{(off.Count > 1 ? "s" : "")} desconectado{(off.Count > 1 ? "s" : "")}",
+                        Foreground = Gray, FontSize = 10, Margin = new Thickness(0, 2, 0, 0), Background = Brushes.Transparent,
+                        ToolTip = string.Join("\n", off.Select(d => d.Name)) });
+            }
         }
 
         if (_body.Children.Count == 0)
-            _body.Children.Add(new TextBlock { Text = ai.Count == 0 && !_s.Sys ? "Nada habilitado — use ⚙" : "carregando…",
+            _body.Children.Add(new TextBlock { Text = ai.Count == 0 && !_s.Sys && !_s.Audio && !_s.Bluetooth ? "Nada habilitado — use ⚙" : "carregando…",
                 Foreground = Gray, Margin = new Thickness(0, 6, 0, 0) });
 
         string status = _updated == null ? "carregando…" : "IA atualizada " + _updated.Value.ToString("HH:mm");
@@ -861,11 +1107,11 @@ class MainWindow : Window
     static TextBlock Header(string text) =>
         new() { Text = text, Foreground = Gray, FontSize = 10, Margin = new Thickness(0, 8, 0, 3) };
 
-    static Border Bar(double used, double width, double height = 6)
+    static Border Bar(double used, double width, double height = 6, Color? color = null)
     {
         var r = new CornerRadius(Math.Max(0, T.BarRadius));
         var fill = new Border { Width = Math.Clamp(used, 0, 100) / 100 * width, CornerRadius = r,
-            Background = new SolidColorBrush(UsageColor(used)), HorizontalAlignment = HorizontalAlignment.Left };
+            Background = new SolidColorBrush(color ?? UsageColor(used)), HorizontalAlignment = HorizontalAlignment.Left };
         return new Border { Width = width, Height = height, CornerRadius = r, Background = Track,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Child = fill };
     }
@@ -879,11 +1125,64 @@ class MainWindow : Window
 
     static void Put(Grid g, UIElement e, int col) { Grid.SetColumn(e, col); g.Children.Add(e); }
 
-    static TextBlock Pct(double used, double size = 11) => new()
+    static TextBlock Pct(double used, double size = 11, Color? color = null, string? text = null) => new()
     {
-        Text = $"{Math.Round(used)}%", Foreground = new SolidColorBrush(UsageColor(used)), FontWeight = FontWeights.SemiBold,
+        Text = text ?? $"{Math.Round(used)}%", Foreground = new SolidColorBrush(color ?? UsageColor(used)), FontWeight = FontWeights.SemiBold,
         FontSize = size, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
     };
+
+    // Par da visão resumida: legenda + mini barra + valor. Cor/texto opcionais (volume, bateria).
+    record Pair(string Cap, double Used, Color? Color = null, string? Text = null);
+
+    static Color Accent => Theme.ToColor(T.Accent, Colors.DodgerBlue);
+    static Color MutedColor => Theme.ToColor(T.Muted, Colors.Gray);
+
+    // Bateria: cheia = verde, média = amarelo, baixa = vermelho (inverso do uso).
+    static Color BatteryColor(double p) => p > 50 ? _ok : p > 20 ? _warn : _crit;
+
+    static Pair VolPair(string cap, double vol, bool mute) =>
+        new(cap, mute ? 0 : vol, mute ? MutedColor : Accent, mute ? "mudo" : null);
+
+    static Pair BatPair(int? bat) =>
+        bat is int b ? new("bat", b, BatteryColor(b)) : new("bat", 0, MutedColor, "—");
+
+    UIElement AudioRow(string label, string device, double vol, bool mute, bool mic)
+    {
+        var g = Cols(48, BarW + 8, 36, 62);
+        g.Background = Brushes.Transparent; // área inteira recebe clique e roda do mouse
+        g.Cursor = Cursors.Hand;
+        g.ToolTip = $"{device}\nClique: {(mute ? "tirar do mudo" : "mudo")} · Roda do mouse: volume";
+        Put(g, new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center }, 0);
+        Put(g, Bar(mute ? 0 : vol, BarW, color: mute ? MutedColor : Accent), 1);
+        Put(g, Pct(vol, color: mute ? MutedColor : Accent, text: mute ? "mudo" : null), 2);
+        Put(g, new TextBlock { Text = AudioMon.ShortName(device), Foreground = Gray, FontSize = 10, TextAlignment = TextAlignment.Right,
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) }, 3);
+        g.MouseLeftButtonDown += (_, e) => { _audioMon?.ToggleMute(mic); ReadAudio(force: true); e.Handled = true; };
+        g.MouseWheel += (_, e) => { _audioMon?.ChangeVolume(mic, e.Delta / 120.0 * 2); ReadAudio(force: true); e.Handled = true; };
+        return g;
+    }
+
+    static UIElement BtRow(BtDevice d)
+    {
+        var g = Cols(134, 92, 38);
+        var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = d.Name };
+        name.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = new SolidColorBrush(_ok), FontSize = 9 });
+        name.Inlines.Add(new System.Windows.Documents.Run(d.Name));
+        Put(g, name, 0);
+        if (d.Battery is int b)
+        {
+            Put(g, Bar(b, 84, color: BatteryColor(b)), 1);
+            Put(g, Pct(b, color: BatteryColor(b)), 2);
+        }
+        else
+        {
+            var t = new TextBlock { Text = "conectado", Foreground = Gray, FontSize = 10, TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center, ToolTip = "O dispositivo não informa a bateria ao Windows" };
+            Grid.SetColumnSpan(t, 2);
+            Put(g, t, 1);
+        }
+        return g;
+    }
 
     static UIElement BarRow(string label, double used, string right)
     {
@@ -897,20 +1196,20 @@ class MainWindow : Window
     }
 
     // Visão resumida: uma linha por fonte, com duas mini barras.
-    static UIElement CompactRow(string label, List<(string cap, double used)> pairs)
+    static UIElement CompactRow(string label, List<Pair> pairs)
     {
         var widths = new List<double> { 76 };
         foreach (var _ in pairs) widths.AddRange(new double[] { 26, 30, 30 });
         var g = Cols(widths.ToArray());
-        Put(g, new TextBlock { Text = label, FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis,
+        Put(g, new TextBlock { Text = label, FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = label,
             VerticalAlignment = VerticalAlignment.Center }, 0);
         int c = 1;
-        foreach (var (cap, used) in pairs)
+        foreach (var p in pairs)
         {
-            Put(g, new TextBlock { Text = cap, Foreground = Gray, FontSize = 9, TextAlignment = TextAlignment.Right,
+            Put(g, new TextBlock { Text = p.Cap, Foreground = Gray, FontSize = 9, TextAlignment = TextAlignment.Right,
                 Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center }, c++);
-            Put(g, Bar(used, 30, 5), c++);
-            Put(g, Pct(used, 10), c++);
+            Put(g, Bar(p.Used, 30, 5, p.Color), c++);
+            Put(g, Pct(p.Used, 10, p.Color, p.Text), c++);
         }
         return g;
     }
