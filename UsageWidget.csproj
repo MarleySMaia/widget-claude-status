@@ -21,6 +21,8 @@
   <ItemGroup>
     <!-- Gera o QR Code do Pix a partir do "Pix copia e cola" (MIT) -->
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <!-- Volume e mudo da saída/microfone padrão (Core Audio, MIT) -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
   </ItemGroup>
 
 </Project>
